@@ -40,17 +40,19 @@ label{display:block;margin:14px 0 6px;font:600 12px system-ui,sans-serif;color:v
 <label>Your writing</label>
 <div class="bar"><button data-m="b"><b>B</b></button><button data-m="i"><i>I</i></button><button data-m="h">Heading</button><button data-m="l">List</button><button data-m="k">Link</button></div>
 <textarea id="src" placeholder="Write here. Use the buttons or Markdown for formatting."></textarea>
-<div class="row"><button class="p" id="enc">Make code</button><button id="cp">Copy code</button></div>
+<div class="row"><button class="p" id="enc">Make code</button></div>
 <label>Code</label><textarea id="code" class="code" readonly></textarea>
+<div class="row"><button id="cp">Copy code</button></div>
 </section>
 
 <section id="s2" class="hide">
 <label>Paste a code</label><textarea id="in" class="code" placeholder="⟦…⟧"></textarea>
-<div class="row"><button class="p" id="dec">Restore writing</button><button id="cr">Copy raw text</button></div>
+<div class="row"><button class="p" id="dec">Restore writing</button></div>
 <label>Restored writing</label>
 <div class="tabs"><button id="v1" class="on">Formatted</button><button id="v2">Raw text</button></div>
 <div class="prev" id="prev"></div>
 <textarea id="raw" class="hide" readonly></textarea>
+<div class="row"><button id="cr">Copy raw text</button></div>
 </section>
 <div id="msg"></div>
 </main>
