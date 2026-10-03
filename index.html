@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Veil</title>
+<!--
+VEIL CODE FORMAT v1 (keep this comment; it lets anyone rebuild a decoder)
+ code   = "⟦" + groups of 5 chars joined by "·" (line breaks allowed) + "⟧"
+ chars  = base64url alphabet (A-Z a-z 0-9 - _), no padding. Strip ⟦ ⟧ · and whitespace, then decode to bytes.
+ bytes  = body + CRC32(body) as 4 bytes big-endian
+ body   = [version byte] + payload
+ v1 open  : payload = raw-deflate( UTF-8 Markdown text )
+ v2 locked: payload = IV(12 bytes) + AES-256-GCM( raw-deflate(UTF-8 text) )
+            PBKDF2-SHA256, 200000 iters, salt "veil-v1", 64 bytes out: first 32 = AES key, last 32 = HMAC key
+            IV = first 12 bytes of HMAC-SHA256(hmacKey, deflated text)  (deterministic: same text+passphrase = same code)
+ Text is Markdown: # heading, **bold**, *italic*, - list, [text](https://link)
+-->
+<style>
+:root{--bg:#faf7f2;--card:#fff;--ink:#2a2622;--mute:#7a7268;--line:#ddd5c6;--ac:#5b4bb7;--aci:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#1b1917;--card:#252220;--ink:#efe9df;--mute:#a39b8e;--line:#3a3530;--ac:#9a8cf0;--aci:#17142b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Georgia,serif}
+main{max-width:760px;margin:0 auto;padding:24px 16px 48px}h1{margin:0;font-size:28px}.sub{color:var(--mute);margin:2px 0 18px}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+button{font:600 14px system-ui,sans-serif;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:9px;padding:9px 16px;cursor:pointer}
+button.p,.tabs button.on{background:var(--ac);color:var(--aci);border-color:var(--ac)}
+textarea,input{width:100%;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px;font:15px/1.5 Georgia,serif}
+textarea{min-height:200px;resize:vertical}.code{font:14px/1.6 ui-monospace,Consolas,monospace;word-break:break-all}
+label{display:block;margin:14px 0 6px;font:600 12px system-ui,sans-serif;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+.bar{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}.row{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+#msg{font:14px system-ui,sans-serif;margin-top:10px;min-height:20px}.err{color:#c0392b}.ok{color:#2e8b57}
+.prev{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 16px;margin-top:6px}
+.note{margin-top:26px;font:13px/1.5 system-ui,sans-serif;color:var(--mute);border:1px solid var(--line);border-radius:10px;padding:12px}
+.hide{display:none}
+</style></head><body><main>
+<h1>Veil</h1><p class="sub">Turn your writing into a code only this tool can turn back.</p>
+<div class="tabs"><button id="t1" class="on">Write → Code</button><button id="t2">Code → Write</button></div>
+<label for="pw">Passphrase (optional)</label>
+<input id="pw" type="password" autocomplete="off" placeholder="Blank = hidden from casual readers only. Set = truly encrypted.">
+
+<section id="s1">
+<label>Your writing</label>
+<div class="bar"><button data-m="b"><b>B</b></button><button data-m="i"><i>I</i></button><button data-m="h">Heading</button><button data-m="l">List</button><button data-m="k">Link</button></div>
+<textarea id="src" placeholder="Write here. Use the buttons or Markdown for formatting."></textarea>
+<div class="row"><button class="p" id="enc">Make code</button><button id="cp">Copy code</button></div>
+<label>Code</label><textarea id="code" class="code" readonly></textarea>
+</section>
+
+<section id="s2" class="hide">
+<label>Paste a code</label><textarea id="in" class="code" placeholder="⟦…⟧"></textarea>
+<div class="row"><button class="p" id="dec">Restore writing</button><button id="cr">Copy raw text</button></div>
+<label>Formatted</label><div class="prev" id="prev"></div>
+<label>Raw text</label><textarea id="raw" readonly></textarea>
+</section>
+</main>
+<script>
+const $=i=>document.getElementById(i),te=new TextEncoder(),td=new TextDecoder(),S=crypto.subtle;
+const A="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+function toB(b){let o="",i=0,n;for(;i+2<b.length;i+=3){n=b[i]<<16|b[i+1]<<8|b[i+2];o+=A[n>>18]+A[n>>12&63]+A[n>>6&63]+A[n&63]}
+const r=b.length-i;if(r==1){n=b[i]<<16;o+=A[n>>18]+A[n>>12&63]}else if(r==2){n=b[i]<<16|b[i+1]<<8;o+=A[n>>18]+A[n>>12&63]+A[n>>6&63]}return o}
+function fromB(s){let a=0,k=0,o=[];for(const c of s){const v=A.indexOf(c);if(v<0)throw Error("This isn't a valid code.");a=a<<6|v;k+=6;if(k>=8){k-=8;o.push(a>>k&255);a&=(1<<k)-1}}return Uint8Array.from(o)}
+const T=new Uint32Array(256).map((_,n)=>{for(let k=0;k<8;k++)n=n&1?0xEDB88320^n>>>1:n>>>1;return n>>>0});
+const crc=b=>{let c=~0;for(const x of b)c=T[(c^x)&255]^c>>>8;return ~c>>>0};
+const pipe=async(b,s)=>new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(s)).arrayBuffer());
+async function keys(pw){const m=await S.importKey("raw",te.encode(pw),"PBKDF2",false,["deriveBits"]);
+const b=new Uint8Array(await S.deriveBits({name:"PBKDF2",salt:te.encode("veil-v1"),iterations:200000,hash:"SHA-256"},m,512));
+return[await S.importKey("raw",b.slice(0,32),"AES-GCM",false,["encrypt","decrypt"]),await S.importKey("raw",b.slice(32),{name:"HMAC",hash:"SHA-256"},false,["sign"])]}
+async function encode(text,pw){let p=await pipe(te.encode(text),new CompressionStream("deflate-raw")),v=1;
+if(pw){const[ek,hk]=await keys(pw),iv=new Uint8Array(await S.sign("HMAC",hk,p)).slice(0,12),ct=new Uint8Array(await S.encrypt({name:"AES-GCM",iv},ek,p));
+const q=new Uint8Array(12+ct.length);q.set(iv);q.set(ct,12);p=q;v=2}
+const body=new Uint8Array(1+p.length);body[0]=v;body.set(p,1);const c=crc(body),all=new Uint8Array(body.length+4);all.set(body);
+new DataView(all.buffer).setUint32(body.length,c);
+const g=toB(all).match(/.{1,5}/g),L=[];for(let i=0;i<g.length;i+=8)L.push(g.slice(i,i+8).join("·"));return"⟦"+L.join("\n")+"⟧"}
+async function decode(code,pw){const all=fromB(code.replace(/[⟦⟧·\s]/g,""));
+if(all.length<6)throw Error("This code is too short.");
+const body=all.slice(0,-4);if(crc(body)!==new DataView(all.buffer).getUint32(all.length-4))throw Error("The code is damaged, mistyped, or cut off.");
+let p=body.slice(1);if(body[0]==2){if(!pw)throw Error("This code is locked. Enter the passphrase.");
+const[ek]=await keys(pw);try{p=new Uint8Array(await S.decrypt({name:"AES-GCM",iv:p.slice(0,12)},ek,p.slice(12)))}catch{throw Error("Wrong passphrase.")}}
+else if(body[0]!=1)throw Error("Unknown code version.");
+return td.decode(await pipe(p,new DecompressionStream("deflate-raw")))}
+const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const inl=s=>esc(s).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/\*(.+?)\*/g,"<i>$1</i>");
+function md(t){let h="",ul=false;for(const l of t.split("\n")){const li=l.match(/^[-*] (.*)/),hd=l.match(/^(#{1,3}) (.*)/);
+if(li){if(!ul)h+="<ul>";ul=true;h+="<li>"+inl(li[1])+"</li>";continue}if(ul){h+="</ul>";ul=false}
+h+=hd?`<h${hd[1].length+1}>${inl(hd[2])}</h${hd[1].length+1}>`:l.trim()?"<p>"+inl(l)+"</p>":""}return h+(ul?"</ul>":"")}
+const msg=(t,ok)=>{$("msg").textContent=t;$("msg").className=ok?"ok":"err"};
+function tab(n){$("s1").classList.toggle("hide",n!=1);$("s2").classList.toggle("hide",n!=2);$("t1").classList.toggle("on",n==1);$("t2").classList.toggle("on",n==2);msg("",1)}
+$("t1").onclick=()=>tab(1);$("t2").onclick=()=>tab(2);
+document.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{const e=$("src"),a=e.selectionStart,z=e.selectionEnd,s=e.value.slice(a,z),m=b.dataset.m;
+const w={b:["**","**"],i:["*","*"],h:["# ",""],l:["- ",""],k:["[","](https://)"]}[m];
+const r=m=="l"?s.split("\n").map(x=>"- "+x).join("\n"):w[0]+s+w[1];e.setRangeText(r,a,z,"end");e.focus()});
+$("enc").onclick=async()=>{try{const t=$("src").value;if(!t.trim())return;const c=await encode(t,$("pw").value);
+if(await decode(c,$("pw").value)!==t)throw Error("Self-check failed.");$("code").value=c;msg("✓ Code made and verified: it decodes back to your exact text.",1)}catch(e){msg(e.message)}};
+$("dec").onclick=async()=>{try{const t=await decode($("in").value,$("pw").value);$("raw").value=t;$("prev").innerHTML=md(t);msg("✓ Restored.",1)}catch(e){$("raw").value="";$("prev").innerHTML="";msg(e.message)}};
+const cp=(id,b)=>$(b).onclick=async()=>{const v=$(id).value;if(!v)return;try{await navigator.clipboard.writeText(v)}catch{$(id).select();document.execCommand("copy")}msg("Copied.",1)};
+cp("code","cp");cp("raw","cr");
+$("pw").addEventListener("input",()=>{const l=$("pw").value.length>0;$("state").textContent=l?"Encrypted":"Open";$("state").className="pill"+(l?" lk":"")});
+</script></body></html>
