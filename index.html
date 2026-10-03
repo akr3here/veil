@@ -26,7 +26,7 @@ textarea{min-height:200px;resize:vertical}.code{font:14px/1.6 ui-monospace,Conso
 label{display:block;margin:14px 0 6px;font:600 12px system-ui,sans-serif;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
 .bar{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}.row{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
 #msg{font:14px system-ui,sans-serif;margin-top:10px;min-height:20px}.err{color:#c0392b}.ok{color:#2e8b57}
-.prev{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 16px;margin-top:6px}
+.prev{min-height:200px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 16px;margin-top:6px}
 .note{margin-top:26px;font:13px/1.5 system-ui,sans-serif;color:var(--mute);border:1px solid var(--line);border-radius:10px;padding:12px}
 .pill{margin-left:8px;padding:2px 9px;border:1px solid var(--line);border-radius:99px;font:600 11px system-ui,sans-serif;letter-spacing:0;text-transform:none}.pill.lk{background:var(--ac);color:var(--aci);border-color:var(--ac)}
 .hide{display:none}
@@ -47,8 +47,10 @@ label{display:block;margin:14px 0 6px;font:600 12px system-ui,sans-serif;color:v
 <section id="s2" class="hide">
 <label>Paste a code</label><textarea id="in" class="code" placeholder="⟦…⟧"></textarea>
 <div class="row"><button class="p" id="dec">Restore writing</button><button id="cr">Copy raw text</button></div>
-<label>Formatted</label><div class="prev" id="prev"></div>
-<label>Raw text</label><textarea id="raw" readonly></textarea>
+<label>Restored writing</label>
+<div class="tabs"><button id="v1" class="on">Formatted</button><button id="v2">Raw text</button></div>
+<div class="prev" id="prev"></div>
+<textarea id="raw" class="hide" readonly></textarea>
 </section>
 <div id="msg"></div>
 </main>
@@ -85,6 +87,8 @@ h+=hd?`<h${hd[1].length+1}>${inl(hd[2])}</h${hd[1].length+1}>`:l.trim()?"<p>"+in
 const msg=(t,ok)=>{const m=$("msg");if(!m)return;m.textContent=t;m.className=ok?"ok":"err"};
 function tab(n){$("s1").classList.toggle("hide",n!=1);$("s2").classList.toggle("hide",n!=2);$("t1").classList.toggle("on",n==1);$("t2").classList.toggle("on",n==2);msg("",1)}
 $("t1").onclick=()=>tab(1);$("t2").onclick=()=>tab(2);
+function view(n){$("prev").classList.toggle("hide",n!=1);$("raw").classList.toggle("hide",n!=2);$("v1").classList.toggle("on",n==1);$("v2").classList.toggle("on",n==2)}
+$("v1").onclick=()=>view(1);$("v2").onclick=()=>view(2);
 document.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{const e=$("src"),a=e.selectionStart,z=e.selectionEnd,s=e.value.slice(a,z),m=b.dataset.m;
 const w={b:["**","**"],i:["*","*"],h:["# ",""],l:["- ",""],k:["[","](https://)"]}[m];
 const r=m=="l"?s.split("\n").map(x=>"- "+x).join("\n"):w[0]+s+w[1];e.setRangeText(r,a,z,"end");e.focus()});
